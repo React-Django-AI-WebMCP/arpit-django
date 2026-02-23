@@ -3,6 +3,7 @@
 Create Calendar Module subtasks under existing ClickUp task 86d227uth.
 Requires CLICKUP_API_KEY in environment. Fetches list_id from parent task.
 """
+
 from __future__ import annotations
 
 import os
@@ -12,10 +13,7 @@ from typing import Any
 import requests
 
 PARENT_TASK_ID = "86d227uth"
-FIGMA_LINK = (
-    "https://www.figma.com/design/4Qf2rnpZ0qrOpR6vilPUQ3/"
-    "02.1-Time-Tracker---Nexus?node-id=7369-75653"
-)
+FIGMA_LINK = "https://www.figma.com/design/4Qf2rnpZ0qrOpR6vilPUQ3/" "02.1-Time-Tracker---Nexus?node-id=7369-75653"
 
 SUBTASKS = [
     {
@@ -101,18 +99,14 @@ def get_parent_task(api_key: str) -> dict[str, Any]:
     return resp.json()
 
 
-def create_subtask(
-    api_key: str, list_id: str, name: str, description: str
-) -> dict[str, Any]:
+def create_subtask(api_key: str, list_id: str, name: str, description: str) -> dict[str, Any]:
     url = f"https://api.clickup.com/api/v2/list/{list_id}/task"
     payload = {
         "name": name,
         "description": description,
         "parent": PARENT_TASK_ID,
     }
-    resp = requests.post(
-        url, headers=get_auth_headers(api_key), json=payload, timeout=30
-    )
+    resp = requests.post(url, headers=get_auth_headers(api_key), json=payload, timeout=30)
     resp.raise_for_status()
     return resp.json()
 
@@ -134,9 +128,7 @@ def main() -> int:
     created = []
     for st in SUBTASKS:
         try:
-            task = create_subtask(
-                api_key, str(list_id), st["name"], st["description"]
-            )
+            task = create_subtask(api_key, str(list_id), st["name"], st["description"])
             task_id = task.get("id")
             created.append((st["name"], task_id))
             print(f"Created subtask: {st['name']} -> {task_id}")

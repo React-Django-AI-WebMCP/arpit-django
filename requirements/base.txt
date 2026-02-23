@@ -1,9 +1,0 @@
-# Common requirements (Django, DRF, database)
-Django>=5.1
-djangorestframework>=3.15
-djangorestframework-simplejwt>=5.3
-django-cors-headers>=4.6
-django-filter>=24.3
-python-decouple>=3.8
-psycopg[binary]>=3.2
-gunicorn>=23.0

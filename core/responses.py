@@ -1,26 +1,28 @@
 """
-Unified API response structure (success and error).
+Unified API response helpers. All endpoints use this shape per api-response-rules.
 """
-from rest_framework.response import Response
 
 
-def success_response(data=None, message: str = "OK", status: int = 200) -> Response:
-    """Return a consistent success payload."""
-    payload = {"success": True, "message": message, "data": data}
-    return Response(payload, status=status)
+class APIResponse:
+    """Consistent JSON shape for success and error responses."""
 
+    @staticmethod
+    def success(data=None, message: str = "OK", status_code: int = 200) -> dict:
+        """Build success payload. Use with Response(..., status=status_code)."""
+        return {"status": status_code, "message": message, "data": data}
 
-def error_response(
-    message: str,
-    *,
-    errors: dict | None = None,
-    error_code: str | None = None,
-    status: int = 400,
-) -> Response:
-    """Return a consistent error payload."""
-    payload = {"success": False, "message": message}
-    if errors is not None:
-        payload["errors"] = errors
-    if error_code is not None:
-        payload["error_code"] = error_code
-    return Response(payload, status=status)
+    @staticmethod
+    def error(
+        message: str = "Error",
+        *,
+        errors: dict | None = None,
+        error_code: str | None = None,
+        status_code: int = 400,
+    ) -> dict:
+        """Build error payload. Use with Response(..., status=status_code)."""
+        body: dict = {"status": status_code, "message": message}
+        if errors is not None:
+            body["errors"] = errors
+        if error_code is not None:
+            body["error_code"] = error_code
+        return body
