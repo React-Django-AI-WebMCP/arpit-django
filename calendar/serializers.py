@@ -4,7 +4,7 @@ DRF serializers for Calendar app. Fields per calendar-module-data-schema.md.
 
 from rest_framework import serializers
 
-from .models import TimeEntry
+from .models import ENTRY_STATUS_CHOICES, TimeEntry
 
 
 class TimeEntrySerializer(serializers.ModelSerializer):
@@ -29,7 +29,9 @@ class TimeEntrySerializer(serializers.ModelSerializer):
 
 
 class TimeEntryCreateUpdateSerializer(serializers.ModelSerializer):
-    """Create/update: Task Name, Project, Time (start, duration_minutes). User set from request."""
+    """Create/update: Task Name, Project, Time (start, duration_minutes), entry_status. User set from request."""
+
+    entry_status = serializers.ChoiceField(choices=ENTRY_STATUS_CHOICES, default="draft")
 
     class Meta:
         model = TimeEntry

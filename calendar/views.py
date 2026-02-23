@@ -14,10 +14,15 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.viewsets import ModelViewSet
 
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import OpenApiParameter, extend_schema, extend_schema_view
+
 from core.responses import APIResponse
 
-from .models import TimeEntry
+from .models import ENTRY_STATUS_CHOICES, TimeEntry
 from .serializers import TimeEntryCreateUpdateSerializer, TimeEntrySerializer
+
+VALID_ENTRY_STATUSES = [choice[0] for choice in ENTRY_STATUS_CHOICES]
 
 User = get_user_model()
 
@@ -53,6 +58,20 @@ def _parse_user_ids(request: Request) -> tuple[list[int] | None, str | None]:
     return ids, None
 
 
+def _parse_entry_statuses(request: Request) -> tuple[list[str] | None, str | None]:
+    """
+    Parse entry_status/entry_statuses query params. Returns (statuses, error_message).
+    Only allows draft, confirmed, billable.
+    """
+    raw = _get_list_param(request, "entry_status", "entry_statuses")
+    if not raw:
+        return None, None
+    invalid = [s for s in raw if s not in VALID_ENTRY_STATUSES]
+    if invalid:
+        return None, f"Invalid entry_status: {invalid[0]!r}. Must be one of: {', '.join(VALID_ENTRY_STATUSES)}"
+    return raw, None
+
+
 def _effective_user(request: Request):
     """User for this request. Authenticated => request.user; else default dev user (auth skipped for now)."""
     if request.user and request.user.is_authenticated:
@@ -67,9 +86,82 @@ def _effective_user(request: Request):
     return user
 
 
+@extend_schema_view(
+    list=extend_schema(
+        parameters=[
+            OpenApiParameter(
+                "start",
+                OpenApiTypes.DATETIME,
+                OpenApiParameter.QUERY,
+                description="Filter entries with start >= this (ISO date-time)",
+            ),
+            OpenApiParameter(
+                "end",
+                OpenApiTypes.DATETIME,
+                OpenApiParameter.QUERY,
+                description="Filter entries with start < this (ISO date-time)",
+            ),
+            OpenApiParameter(
+                "project",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by project (repeat or use projects)",
+                many=True,
+            ),
+            OpenApiParameter(
+                "projects", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Filter by projects, comma-separated"
+            ),
+            OpenApiParameter(
+                "task",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by task name (repeat or use tasks)",
+                many=True,
+            ),
+            OpenApiParameter(
+                "tasks", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Filter by task names, comma-separated"
+            ),
+            OpenApiParameter(
+                "user",
+                OpenApiTypes.INT,
+                OpenApiParameter.QUERY,
+                description="Filter by user id (repeat or use users)",
+                many=True,
+            ),
+            OpenApiParameter(
+                "users", OpenApiTypes.STR, OpenApiParameter.QUERY, description="Filter by user ids, comma-separated"
+            ),
+            OpenApiParameter(
+                "scope",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Calendar scope: personal (current user only) or team (all entries)",
+                enum=["personal", "team"],
+            ),
+            OpenApiParameter(
+                "entry_status",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by entry status (repeat or use entry_statuses)",
+                enum=VALID_ENTRY_STATUSES,
+                many=True,
+            ),
+            OpenApiParameter(
+                "entry_statuses",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                description="Filter by entry statuses, comma-separated (draft, confirmed, billable)",
+            ),
+            OpenApiParameter("page", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Page number (1-based)"),
+            OpenApiParameter(
+                "page_size", OpenApiTypes.INT, OpenApiParameter.QUERY, description="Page size (default 100)"
+            ),
+        ],
+    ),
+)
 class TimeEntryViewSet(ModelViewSet):
     """
-    List: GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=...
+    List: GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=...&entry_status=...
     Create: POST /api/calendar/entries/
     Retrieve: GET /api/calendar/entries/{id}/
     Update: PATCH /api/calendar/entries/{id}/
@@ -104,12 +196,22 @@ class TimeEntryViewSet(ModelViewSet):
         return self.get_queryset()
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=..."""
+        """GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=...&entry_status=..."""
         user_ids, user_err = _parse_user_ids(request)
         if user_err is not None:
             return Response(
                 APIResponse.error(
                     message=user_err,
+                    error_code="VALIDATION_ERROR",
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ),
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
+        entry_statuses, status_err = _parse_entry_statuses(request)
+        if status_err is not None:
+            return Response(
+                APIResponse.error(
+                    message=status_err,
                     error_code="VALIDATION_ERROR",
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 ),
@@ -129,6 +231,8 @@ class TimeEntryViewSet(ModelViewSet):
             qs = qs.filter(task_name__in=tasks)
         if user_ids:
             qs = qs.filter(user_id__in=user_ids)
+        if entry_statuses:
+            qs = qs.filter(entry_status__in=entry_statuses)
         page_size = int(request.query_params.get("page_size", 100))
         page = int(request.query_params.get("page", 1))
         offset = (page - 1) * page_size
