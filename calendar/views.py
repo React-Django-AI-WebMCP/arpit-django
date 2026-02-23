@@ -75,9 +75,9 @@ class TimeEntryViewSet(ModelViewSet):
         page_size = int(request.query_params.get("page_size", 100))
         page = int(request.query_params.get("page", 1))
         offset = (page - 1) * page_size
-        page_qs = qs[offset : offset + page_size + 1]
-        items = list(page_qs[:page_size])
-        has_next = len(list(page_qs)) > page_size
+        page_slice = list(qs[offset : offset + page_size + 1])
+        items = page_slice[:page_size]
+        has_next = len(page_slice) > page_size
         data = {
             "items": TimeEntrySerializer(items, many=True).data,
             "page": page,
