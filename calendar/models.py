@@ -5,6 +5,16 @@ Calendar app models. Time entries per calendar-module-data-schema.md.
 from django.conf import settings
 from django.db import models
 
+ENTRY_STATUS_DRAFT = "draft"
+ENTRY_STATUS_CONFIRMED = "confirmed"
+ENTRY_STATUS_BILLABLE = "billable"
+
+ENTRY_STATUS_CHOICES = [
+    (ENTRY_STATUS_DRAFT, "Draft"),
+    (ENTRY_STATUS_CONFIRMED, "Confirmed"),
+    (ENTRY_STATUS_BILLABLE, "Billable"),
+]
+
 
 class TimeEntry(models.Model):
     """
@@ -17,7 +27,12 @@ class TimeEntry(models.Model):
     project = models.CharField(max_length=255)
     start = models.DateTimeField(db_index=True)
     duration_minutes = models.PositiveIntegerField(help_text="Duration in minutes (for placement and resize).")
-    entry_status = models.CharField(db_index=True, default="default", max_length=50)
+    entry_status = models.CharField(
+        max_length=50,
+        choices=ENTRY_STATUS_CHOICES,
+        default=ENTRY_STATUS_DRAFT,
+        db_index=True,
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
