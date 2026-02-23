@@ -1,2 +1,0 @@
-# Production: base only (gunicorn already in base.txt)
--r base.txt

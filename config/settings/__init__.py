@@ -1,1 +1,1 @@
-# Split settings: base, local, production
+# Split settings: use config.settings.local or config.settings.production
