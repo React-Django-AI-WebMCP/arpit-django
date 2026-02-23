@@ -1,5 +1,6 @@
 """
-Calendar API views. List entries (date range), CRUD single entry. Per tech-doc-02, tech-doc-03.
+Calendar API views. List entries (date range, filter, scope), CRUD single entry.
+Per tech-doc-02, tech-doc-03, tech-doc-05.
 Auth skipped for now: unauthenticated requests use a default user and can CRUD any entry.
 """
 
@@ -20,6 +21,37 @@ from .serializers import TimeEntryCreateUpdateSerializer, TimeEntrySerializer
 
 User = get_user_model()
 
+# Scope per tech-doc-05: supported values "personal" (default), "team".
+SCOPE_TEAM = "team"
+
+
+def _get_list_param(request: Request, singular: str, plural: str) -> list[str]:
+    """Return query param list; supports ?key=1&key=2 and ?keys=1,2 (plural comma-separated)."""
+    many = request.query_params.getlist(plural)
+    if many:
+        out: list[str] = []
+        for v in many:
+            out.extend(s.strip() for s in str(v).split(",") if s.strip())
+        return out
+    return list(request.query_params.getlist(singular))
+
+
+def _parse_user_ids(request: Request) -> tuple[list[int] | None, str | None]:
+    """
+    Parse user/users query params as integer ids. Returns (ids, error_message).
+    If error_message is set, ids is None (invalid value found).
+    """
+    raw = _get_list_param(request, "user", "users")
+    if not raw:
+        return None, None
+    ids: list[int] = []
+    for s in raw:
+        try:
+            ids.append(int(s))
+        except ValueError:
+            return None, f"Invalid user id: {s!r}"
+    return ids, None
+
 
 def _effective_user(request: Request):
     """User for this request. Authenticated => request.user; else default dev user (auth skipped for now)."""
@@ -37,7 +69,7 @@ def _effective_user(request: Request):
 
 class TimeEntryViewSet(ModelViewSet):
     """
-    List: GET /api/calendar/entries/?start=...&end=... (ISO date/datetime).
+    List: GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=...
     Create: POST /api/calendar/entries/
     Retrieve: GET /api/calendar/entries/{id}/
     Update: PATCH /api/calendar/entries/{id}/
@@ -63,15 +95,40 @@ class TimeEntryViewSet(ModelViewSet):
             qs = qs.filter(user=self.request.user)
         return qs
 
+    def _queryset_for_scope(self, request: Request):
+        """Apply scope: personal (or unknown) => current user only; team => no user filter (all entries)."""
+        scope = (request.query_params.get("scope") or "").strip().lower()
+        if scope == SCOPE_TEAM:
+            return TimeEntry.objects.all().select_related("user")
+        # personal or unknown => current user only
+        return self.get_queryset()
+
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
-        """GET /api/calendar/entries/?start=...&end=... Pagination per project standards."""
+        """GET /api/calendar/entries/?start=...&end=...&project=...&task=...&user=...&scope=..."""
+        user_ids, user_err = _parse_user_ids(request)
+        if user_err is not None:
+            return Response(
+                APIResponse.error(
+                    message=user_err,
+                    error_code="VALIDATION_ERROR",
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                ),
+                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            )
         start_dt, end_dt = self._parse_start_end(request)
-        qs = self.get_queryset()
+        qs = self._queryset_for_scope(request)
         if start_dt is not None:
             qs = qs.filter(start__gte=start_dt)
         if end_dt is not None:
-            # Entries that start before end (or that overlap: end of entry = start + duration)
             qs = qs.filter(start__lt=end_dt)
+        projects = _get_list_param(request, "project", "projects")
+        if projects:
+            qs = qs.filter(project__in=projects)
+        tasks = _get_list_param(request, "task", "tasks")
+        if tasks:
+            qs = qs.filter(task_name__in=tasks)
+        if user_ids:
+            qs = qs.filter(user_id__in=user_ids)
         page_size = int(request.query_params.get("page_size", 100))
         page = int(request.query_params.get("page", 1))
         offset = (page - 1) * page_size
