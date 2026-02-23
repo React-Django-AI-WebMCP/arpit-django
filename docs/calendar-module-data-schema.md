@@ -19,7 +19,7 @@
 | Task name      | Edit Entry modal: “Task Name”                  | Label on block = e.g. task or project name. |
 | Project        | Edit Entry modal: “Project”; filter “Project”  | One project per entry for filtering/display. |
 | Time           | Edit Entry modal: “Time”; resize = duration    | Start and duration (or start/end) required for placement and resize. Exact semantics per product. |
-| Entry type/status | “Distinguished by colour”                    | **NEEDS CLARIFICATION:** Which types/statuses and how many colours not defined. |
+| Entry type/status | “Distinguished by colour”                    | One of: **draft**, **confirmed**, **billable** (default: draft). |
 | User           | Filter “User”; scope “personal” vs “team-wide”  | Entries are attributable to a user for filtering and scope. |
 
 ## Database / API shape (minimal)
