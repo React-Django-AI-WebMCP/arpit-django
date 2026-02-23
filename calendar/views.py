@@ -21,8 +21,7 @@ from .serializers import TimeEntryCreateUpdateSerializer, TimeEntrySerializer
 
 User = get_user_model()
 
-# Scope values per tech-doc-05 (e.g. personal, team).
-SCOPE_PERSONAL = "personal"
+# Scope per tech-doc-05: supported values "personal" (default), "team".
 SCOPE_TEAM = "team"
 
 
@@ -97,10 +96,11 @@ class TimeEntryViewSet(ModelViewSet):
         return qs
 
     def _queryset_for_scope(self, request: Request):
-        """Apply scope: personal => current user only; team => no user filter (all entries)."""
+        """Apply scope: personal (or unknown) => current user only; team => no user filter (all entries)."""
         scope = (request.query_params.get("scope") or "").strip().lower()
         if scope == SCOPE_TEAM:
             return TimeEntry.objects.all().select_related("user")
+        # personal or unknown => current user only
         return self.get_queryset()
 
     def list(self, request: Request, *args: Any, **kwargs: Any) -> Response:
@@ -127,7 +127,7 @@ class TimeEntryViewSet(ModelViewSet):
         tasks = _get_list_param(request, "task", "tasks")
         if tasks:
             qs = qs.filter(task_name__in=tasks)
-        if user_ids is not None and len(user_ids) > 0:
+        if user_ids:
             qs = qs.filter(user_id__in=user_ids)
         page_size = int(request.query_params.get("page_size", 100))
         page = int(request.query_params.get("page", 1))
